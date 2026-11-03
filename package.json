@@ -18,6 +18,7 @@
     "cordis.patch.yml",
     "locale",
     "icon.svg",
+    "assets/icon-180.png",
     "README.md",
     "docs/ARCHITECTURE.md",
     "docs/CHAT_RECORDS_0.5.1.md",
