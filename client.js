@@ -2,7 +2,7 @@ window.__ModuleLoader__.load({id:'@xiaomao361/dsh-jand',factory(require){
 const React=require('react');const {z}=require('zod');
 // Shared, browser-safe wire contract. Host and Client use the same schemas.
 function panelSpec(z) {
-  const schemas={read:z.strictObject({chat:z.string().regex(/^[a-f0-9]{32}$/).optional()}),configure:z.strictObject({relay:z.string().optional(),token_file:z.string().optional()}),prepare:z.strictObject({}),saveToken:z.strictObject({value:z.string().min(1).max(8192)})};
+  const schemas={read:z.strictObject({chat:z.string().regex(/^[a-f0-9]{32}$/).optional(),mode:z.enum(['local','connection']).optional()}),configure:z.strictObject({relay:z.string().optional(),token_file:z.string().optional()}),prepare:z.strictObject({}),saveToken:z.strictObject({value:z.string().min(1).max(8192)})};
   return {package:'@xiaomao361/dsh-jand',methods:Object.fromEntries(Object.entries(schemas).map(([name,schema])=>{
     const codec={mode:'strict',typeSymbol:`@xiaomao361/dsh-jand#${name}`,create:()=>schema,jsonSchema:z.toJSONSchema(schema)};
     return ['jandPanel/'+name,{service:'jandPanel',invocation:{kind:'direct'},parameters:[{name:'request',wire:'request',source:'json',codec,strictCodec:codec}],result:{mode:'strict',typeSymbol:'@xiaomao361/dsh-jand#result',create:()=>z.json(),jsonSchema:{}}}];
@@ -53,7 +53,7 @@ function shortText(value,limit=100) {
   const text=typeof value==='string'?value.replace(/\s+/g,' ').trim():'';
   return text.length>limit?text.slice(0,limit)+'…':text;
 }
-function recordSummary(detail) {
+function recordSummary(detail,{listOnly=false}={}) {
   const timeline=detail.timeline??[],messages=timeline.filter(l=>l.kind==='message');
   const known=detail.statistics?.integrity?.transcript==='valid';
   const first=timeline.find(l=>['started','joined'].includes(l.kind));
@@ -64,20 +64,21 @@ function recordSummary(detail) {
   const invitation=known&&detail.role==='host'&&first?.kind==='started'&&!hasPeer&&!messages.length&&!timeline.some(l=>l.kind==='joined');
   const category=!known?'other':hasPeer?'conversation':invitation?'invitation':'other';
   const current=detail.segments?.at(-1)?.events??timeline;
+  const done=current.filter(l=>l.kind==='done').at(-1);
+  const listener=detail.reception?.listener??'unknown';
+  let state=!known?'recordUnknown':detail.status==='ended'?'recordEnded':detail.status==='paused'?'recordPaused':invitation?'invitationSent':done?(peer(done)?'peerReported':'selfReported'):listener==='running'?'receiving':listener==='starting'?'startingReception':listener==='stopping'?'stoppingReception':listener==='stopped'?'receptionStopped':'recordOpen';
+  if(known&&['active','waiting'].includes(detail.status)&&!invitation&&(detail.reception?.failures>=5||(detail.reception?.lastOutcome==='failed'&&!['running','starting'].includes(listener))))state='receptionSuspended';
+  const summary={chat:detail.chat,title,category,state,known,last:timeline.at(-1)?.time??null,messages:known?messages.length:null};
+  if(listOnly)return summary;
   const currentKeys=new Set(current.map(l=>JSON.stringify(l)));
   const pending=(detail.pendingRequests??[]).filter(l=>currentKeys.has(JSON.stringify(l)));
   const results=(detail.results??[]).filter(l=>currentKeys.has(JSON.stringify(l)));
   const latestBySide=new Map();
   for(const line of results)if(['host','guest'].includes(line.from))latestBySide.set(line.from,line);
   const latestResults=[...latestBySide.values()];
-  const done=current.filter(l=>l.kind==='done').at(-1);
-  const listener=detail.reception?.listener??'unknown';
-  let state=!known?'recordUnknown':detail.status==='ended'?'recordEnded':detail.status==='paused'?'recordPaused':invitation?'invitationSent':done?(peer(done)?'peerReported':'selfReported'):listener==='running'?'receiving':listener==='starting'?'startingReception':listener==='stopping'?'stoppingReception':listener==='stopped'?'receptionStopped':'recordOpen';
-  if(known&&['active','waiting'].includes(detail.status)&&!invitation&&(detail.reception?.failures>=5||(detail.reception?.lastOutcome==='failed'&&!['running','starting'].includes(listener))))state='receptionSuspended';
   const incoming=pending.filter(peer),outgoing=pending.filter(l=>l.from===detail.role);
-  return {chat:detail.chat,title,goal,category,state,listener,protocol:detail.status,known,
-    started:first?.time??null,last:timeline.at(-1)?.time??null,
-    messages:known?messages.length:null,recordedMessages:messages.length,
+  return {...summary,goal,listener,protocol:detail.status,
+    started:first?.time??null,recordedMessages:messages.length,
     incoming:incoming.length,outgoing:outgoing.length,latestResults,
     incomingRequests:incoming,outgoingRequests:outgoing,
     latest:timeline.filter(l=>l.kind==='message'||l.kind==='done').at(-1)??null};
@@ -239,9 +240,24 @@ function Panel({t,read,configure,prepare,saveToken}) {
   const generation=React.useRef(0),previous=React.useRef(null),formId=React.useId();
   const load=React.useCallback(async(selected='')=>{
     const request=++generation.current;setError('');setLoading(true);
-    try{const value=await read(selected?{chat:selected}:{});if(request!==generation.current)return;previous.current=value;setView(value);setRelay(value.status.relay);}
-    catch{if(request===generation.current)setError(t(previous.current?'refreshFailed':'failed'));}
+    try{
+      const value=await read({mode:'local',...selected?{chat:selected}:{}});
+      if(request!==generation.current)return;
+      const prior=previous.current?.status;
+      const status=prior?.relay===value.status.relay&&selected?prior:value.status;
+      previous.current={...previous.current,...value,status};
+      setView(previous.current);setRelay(status.relay);
+    }
+    catch{if(request===generation.current)setError(t(previous.current?'refreshFailed':'failed'));return;}
     finally{if(request===generation.current)setLoading(false);}
+    if(!selected){
+      try{
+        const {status}=await read({mode:'connection'});
+        if(request!==generation.current)return;
+        previous.current={...previous.current,status};
+        setView(previous.current);
+      }catch{/* Local history remains usable while connection status is unavailable. */}
+    }
   },[read,t]);
   React.useEffect(()=>{void load(chat);return()=>{generation.current++;};},[chat,load]);
   const act=async(name,action)=>{

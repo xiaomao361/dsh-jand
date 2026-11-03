@@ -3,9 +3,24 @@ function Panel({t,read,configure,prepare,saveToken}) {
   const generation=React.useRef(0),previous=React.useRef(null),formId=React.useId();
   const load=React.useCallback(async(selected='')=>{
     const request=++generation.current;setError('');setLoading(true);
-    try{const value=await read(selected?{chat:selected}:{});if(request!==generation.current)return;previous.current=value;setView(value);setRelay(value.status.relay);}
-    catch{if(request===generation.current)setError(t(previous.current?'refreshFailed':'failed'));}
+    try{
+      const value=await read({mode:'local',...selected?{chat:selected}:{}});
+      if(request!==generation.current)return;
+      const prior=previous.current?.status;
+      const status=prior?.relay===value.status.relay&&selected?prior:value.status;
+      previous.current={...previous.current,...value,status};
+      setView(previous.current);setRelay(status.relay);
+    }
+    catch{if(request===generation.current)setError(t(previous.current?'refreshFailed':'failed'));return;}
     finally{if(request===generation.current)setLoading(false);}
+    if(!selected){
+      try{
+        const {status}=await read({mode:'connection'});
+        if(request!==generation.current)return;
+        previous.current={...previous.current,status};
+        setView(previous.current);
+      }catch{/* Local history remains usable while connection status is unavailable. */}
+    }
   },[read,t]);
   React.useEffect(()=>{void load(chat);return()=>{generation.current++;};},[chat,load]);
   const act=async(name,action)=>{

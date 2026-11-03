@@ -1,6 +1,6 @@
 {
   "name": "@xiaomao361/dsh-jand",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "type": "module",
   "description": "Durable cross-device jand conversations using native DeepSeek Harness jobs",
   "exports": {
@@ -22,7 +22,8 @@
     "README.md",
     "docs/ARCHITECTURE.md",
     "docs/CHAT_RECORDS_0.5.1.md",
-    "docs/RELEASE_0.5.1.md"
+    "docs/RELEASE_0.5.1.md",
+    "docs/RELEASE_0.5.2.md"
   ],
   "dsh": {
     "bundle": {

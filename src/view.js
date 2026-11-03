@@ -30,15 +30,12 @@ export function timelineRecord(line) {
   if(Array.isArray(line.plan))value.plan=line.plan.map(p=>({goal:text(p.goal,1024),budget:Number.isSafeInteger(p.budget)?p.budget:null}));
   value.untrusted=true;return value;
 }
-export function inspectLocal(root,chat) {
+function readTranscript(root,chat) {
   chatId(chat);const directory=path.join(root,'home/chats');
   const raw=read(path.join(directory,chat+'.json'),null);
   if(!raw||raw.id!==chat)throw new Error('Conversation not found in this plugin.');
   const transcript=lines(path.join(directory,chat+'.transcript.jsonl'),isLine);
   const timeline=transcript.records.map(timelineRecord);
-  const cost=lines(path.join(directory,chat+'.cost.jsonl'),isCost);
-  const metrics=lines(path.join(root,'plugin-metrics.jsonl'),isMetric);
-  const ownedMetrics=metrics.records.filter(m=>m.chat===chat);
   const initial=timeline.find(l=>['started','joined'].includes(l.kind));
   const segments=[];let segment;
   for(const line of timeline) {
@@ -47,6 +44,24 @@ export function inspectLocal(root,chat) {
     }
     if(segment){segment.events.push(line);if(['checkpoint','closed','expired'].includes(line.kind))segment.outcome=line.kind;}
   }
+  const state=read(path.join(root,'conversations',chat,'inbox.json'),null);
+  const lastState=timeline.filter(l=>['started','joined','resumed','checkpoint','closed','expired','decline','declined'].includes(l.kind)).at(-1)?.kind;
+  const status=transcript.integrity!=='valid'||!initial?'unknown':state?.ended?'ended':['closed','expired','decline','declined'].includes(lastState)?'ended':lastState==='checkpoint'?'paused':lastState==='started'&&raw.role==='host'?'waiting':lastState?'active':'unknown';
+  return {chat,role:['host','guest'].includes(raw.role)?raw.role:'unknown',status,goal:segments.at(-1)?.goal??initial?.text??'',segments,timeline,state,integrity:transcript.integrity};
+}
+
+export function inspectTranscript(root,chat) {
+  const {state,integrity,...view}=readTranscript(root,chat);
+  return {...view,statistics:{integrity:{transcript:integrity}},reception:state?{failures:state.failures,lastOutcome:state.lastOutcome}:null};
+}
+
+export function inspectLocal(root,chat) {
+  const {state,integrity,...view}=readTranscript(root,chat);
+  const {segments,timeline}=view;
+  const directory=path.join(root,'home/chats');
+  const cost=lines(path.join(directory,chat+'.cost.jsonl'),isCost);
+  const metrics=lines(path.join(root,'plugin-metrics.jsonl'),isMetric);
+  const ownedMetrics=metrics.records.filter(m=>m.chat===chat);
   const costsComplete=cost.integrity==='valid'&&cost.records.length>0&&['start','claim'].includes(cost.records[0].cmd);
   let costStats=cost.integrity==='valid'&&cost.records.length?cost.records.reduce((s,r)=>{
     s.cliOutputBytes+=r.out;s.writtenBytes+=r.wrote??0;
@@ -84,18 +99,19 @@ export function inspectLocal(root,chat) {
   const replied=new Set(timeline.filter(l=>l.reply_to).map(l=>l.reply_to));
   const superseded=new Set(timeline.filter(l=>l.kind==='message'&&l.supersedes).map(l=>l.supersedes));
   const pending=timeline.filter(l=>l.kind==='message'&&l.type==='request'&&l.id&&!replied.has(l.id));
-  const state=read(path.join(root,'conversations',chat,'inbox.json'),null);
-  const lastState=timeline.filter(l=>['started','joined','resumed','checkpoint','closed','expired','decline','declined'].includes(l.kind)).at(-1)?.kind;
-  const status=transcript.integrity!=='valid'||!initial?'unknown':state?.ended?'ended':['closed','expired','decline','declined'].includes(lastState)?'ended':lastState==='checkpoint'?'paused':lastState==='started'&&raw.role==='host'?'waiting':lastState?'active':'unknown';
-  return {schema_version:1,chat,role:['host','guest'].includes(raw.role)?raw.role:'unknown',status,goal:segments.at(-1)?.goal??initial?.text??'',segments,timeline,pendingRequests:pending,
+  return {schema_version:1,...view,pendingRequests:pending,
     results:timeline.filter(l=>l.kind==='done'||(l.kind==='message'&&l.type==='delivery'&&!superseded.has(l.id))),
-    statistics:{jand:costStats,plugin:pluginStats,tokenUsage:null,integrity:{transcript:transcript.integrity,cost:costOverflow?'overflow':cost.integrity,metrics:metricsOverflow?'overflow':metrics.integrity,costCoverage:costOverflow?'overflow':costsComplete?'complete':cost.integrity==='valid'?'partial':cost.integrity},costRecords:cost.integrity==='valid'?cost.records.map(r=>({time:r.time,cmd:r.cmd,out:r.out,wrote:r.wrote??0,empty:!!r.empty,check:!!r.check,own:!!r.own,exit:r.exit})):[]},
+    statistics:{jand:costStats,plugin:pluginStats,tokenUsage:null,integrity:{transcript:integrity,cost:costOverflow?'overflow':cost.integrity,metrics:metricsOverflow?'overflow':metrics.integrity,costCoverage:costOverflow?'overflow':costsComplete?'complete':cost.integrity==='valid'?'partial':cost.integrity},costRecords:cost.integrity==='valid'?cost.records.map(r=>({time:r.time,cmd:r.cmd,out:r.out,wrote:r.wrote??0,empty:!!r.empty,check:!!r.check,own:!!r.own,exit:r.exit})):[]},
     reception:state?{ended:state.ended,failures:state.failures,retryAt:state.retryAt,lastOutcome:state.lastOutcome,unacknowledged:state.records.filter(r=>!state.acked.includes(r.id)).length}:null};
 }
+export function localChatIds(root) {
+  const directory=path.join(root,'home/chats');
+  if(!fs.existsSync(directory))return [];
+  return fs.readdirSync(directory).filter(n=>/^[a-f0-9]{32}\.json$/.test(n)).map(n=>n.slice(0,32));
+}
+
 export function listLocal(root) {
-  const directory=path.join(root,'home/chats');if(!fs.existsSync(directory))return [];
-  return fs.readdirSync(directory).filter(n=>/^[a-f0-9]{32}\.json$/.test(n)).map(n=>{
-    const chat=n.slice(0,32);
+  return localChatIds(root).map(chat=>{
     try{
       const v=inspectLocal(root,chat),known=v.statistics.integrity.transcript==='valid';
       const started=v.timeline.find(l=>['started','joined'].includes(l.kind))?.time??null;

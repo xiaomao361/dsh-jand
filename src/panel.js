@@ -5,7 +5,7 @@ import { readHistory } from './history.js';
 import {panelSpec} from './panel-contract.js';
 
 const codecs={
-  read:z.strictObject({chat:z.string().regex(/^[a-f0-9]{32}$/).optional()}),
+  read:z.strictObject({chat:z.string().regex(/^[a-f0-9]{32}$/).optional(),mode:z.enum(['local','connection']).optional()}),
   configure:z.strictObject({relay:z.string().optional(),token_file:z.string().optional()}),
   prepare:z.strictObject({}),saveToken:z.strictObject({value:z.string().min(1).max(8192)})
 };
@@ -25,7 +25,8 @@ export class JandPanel extends TypertRemoteService {
   async read(request) {
     this.assertOwner();codecs.read.parse(request);
     const manager=this.manager;
-    const [connection,history]=await Promise.all([status(manager),readHistory(manager,request.chat)]);
+    if(request.mode==='connection')return {status:await status(manager)};
+    const [connection,history]=await Promise.all([status(manager,{probe:request.mode!=='local'}),readHistory(manager,request.chat)]);
     return {status:connection,...history};
   }
   async configure(request) {

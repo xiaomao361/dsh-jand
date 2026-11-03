@@ -37,13 +37,14 @@ test('missing or broken records cannot become zero messages or invitations',()=>
  assert.equal(result.messages,null);assert.equal(result.category,'other');assert.equal(result.state,'recordUnknown');
  assert.equal(shortText('x'.repeat(5000),100).length,101);
 });
-test('panel list and detail share one reader, failed native reads are not replaced by local success',async t=>{
+test('history lists local summaries without inspecting details and only loads the selected record',async t=>{
  const f=viewFixture(t);let calls=0;
- const v=detail([event('joined','guest'),event('message','guest','x'.repeat(50000),{type:'delivery'})],{chat:f.chat,results:[event('done','guest','y'.repeat(50000))]});
- const manager={root:f.root,inspect:async()=>{calls++;return v;}};
- const result=await readHistory(manager,f.chat);assert.equal(calls,1);assert.equal(result.detail,v);assert.equal(result.conversations[0].messages,1);assert.ok(JSON.stringify(result.conversations).length<2000,'list payload does not contain full bodies');
+ const v=detail([event('joined','guest'),event('message','guest','x'.repeat(50000),{type:'delivery'})],{chat:f.chat});
+ const manager={root:f.root,inspect:async chat=>{assert.equal(chat,f.chat);calls++;return v;}};
+ const list=await readHistory(manager);assert.equal(calls,0);assert.equal(list.conversations.length,1);
+ assert.ok(JSON.stringify(list.conversations).length<2000,'list payload does not contain full bodies');
+ const result=await readHistory(manager,f.chat);assert.equal(calls,1);assert.equal(result.detail,v);
  manager.inspect=async()=>{throw Error('private diagnostic');};
- const failed=await readHistory(manager);assert.equal(failed.conversations[0].state,'recordUnreadable');assert.equal(failed.conversations[0].messages,null);assert.ok(!JSON.stringify(failed).includes('private diagnostic'));
  await assert.rejects(()=>readHistory(manager,f.chat),/could not be read/);
 });
 

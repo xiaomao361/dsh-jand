@@ -25,6 +25,18 @@ async function gatewayFixture(t) {
 test('real DSH Gateway registers strict panel endpoints, protects credentials and rejects guests',async t=>{
   const {call,manager,ctx}=await gatewayFixture(t);
   assert.equal(panelRemote.descriptors.length,4);assert.equal(ctx.typert.local.list().filter(d=>d.namespace==='jandPanel').length,4);
+  const fetcher=manager.fetcher;
+  let probes=0;
+  manager.fetcher=async(...args)=>{probes++;return fetcher(...args);};
+  const local=await call('read',{mode:'local'});
+  assert.equal(local.ok,true);
+  assert.equal(local.value.status.health.state,'unchecked');
+  assert.deepEqual(local.value.conversations,[]);
+  assert.equal(probes,0,'local history must not wait for the relay');
+  const connection=await call('read',{mode:'connection'});
+  assert.equal(connection.value.status.health.state,'online');
+  assert.equal(probes,1);
+  assert.equal('conversations' in connection.value,false);
   const first=await call('read',{});assert.equal(first.ok,true,JSON.stringify(first));assert.equal(first.value.status.creation,'token_required');
   const synthetic='synthetic-token-not-a-live-credential';
   const saved=await call('saveToken',{value:synthetic});assert.equal(saved.ok,true,JSON.stringify(saved));assert.ok(!JSON.stringify(saved).includes(synthetic));
