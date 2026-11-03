@@ -1,0 +1,64 @@
+{
+  "name": "@xiaomao361/dsh-jand",
+  "version": "0.5.1",
+  "type": "module",
+  "description": "Durable cross-device jand conversations using native DeepSeek Harness jobs",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "src",
+    "kernel/manifest.json",
+    "kernel/LICENSE-*",
+    "cordis.patch.yml",
+    "locale",
+    "icon.svg",
+    "README.md",
+    "docs/ARCHITECTURE.md",
+    "docs/CHAT_RECORDS_0.5.1.md",
+    "docs/RELEASE_0.5.1.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings-general",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "external": [
+        "zod"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:client": "node scripts/build-client.mjs",
+    "test": "node --test test/*.test.js",
+    "test:native": "node --test test/native.integration.js",
+    "check": "node --check index.js && node --check src/worker.js && node --check client.js && node --check src/tasks.js && node --check src/task-process.js && node --check src/history.js && node --check src/presentation.js",
+    "pack:local": "npm run build:client && python3 scripts/package-local.py",
+    "test:tasks": "node scripts/test-tasks.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiaomao361/dsh-jand.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xiaomao361/dsh-jand/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

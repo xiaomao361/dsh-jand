@@ -1,0 +1,4 @@
+- insert:
+    - id: dsh-jand
+      name: '@xiaomao361/dsh-jand'
+      config: {}

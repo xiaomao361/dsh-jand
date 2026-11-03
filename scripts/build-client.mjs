@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const contract=fs.readFileSync(path.join(root,'src/panel-contract.js'),'utf8').replace(/^export /gm,'');
+const progress=fs.readFileSync(path.join(root,'src/progress.js'),'utf8').replace(/^export /gm,'');
+const presentation=fs.readFileSync(path.join(root,'src/presentation.js'),'utf8').replace(/^export /gm,'');
+const source=['locale.js','styles.js','components.js','client.js'].map(file=>fs.readFileSync(path.join(root,'ui',file),'utf8')).join('\n');
+const factory=`window.__ModuleLoader__.load({id:'@xiaomao361/dsh-jand',factory(require){\nconst React=require('react');const {z}=require('zod');\n${contract}\n${progress}\n${presentation}\n${source}\n}});\n`;
+fs.writeFileSync(path.join(root,'client.js'),factory);

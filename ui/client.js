@@ -1,0 +1,40 @@
+function Panel({t,read,configure,prepare,saveToken}) {
+  const [view,setView]=React.useState(null),[chat,setChat]=React.useState(''),[page,setPage]=React.useState('home'),[busy,setBusy]=React.useState(''),[notice,setNotice]=React.useState(''),[error,setError]=React.useState(''),[relay,setRelay]=React.useState(''),[token,setToken]=React.useState(''),[tokenFile,setTokenFile]=React.useState(''),[loading,setLoading]=React.useState(true);
+  const generation=React.useRef(0),previous=React.useRef(null),formId=React.useId();
+  const load=React.useCallback(async(selected='')=>{
+    const request=++generation.current;setError('');setLoading(true);
+    try{const value=await read(selected?{chat:selected}:{});if(request!==generation.current)return;previous.current=value;setView(value);setRelay(value.status.relay);}
+    catch{if(request===generation.current)setError(t(previous.current?'refreshFailed':'failed'));}
+    finally{if(request===generation.current)setLoading(false);}
+  },[read,t]);
+  React.useEffect(()=>{void load(chat);return()=>{generation.current++;};},[chat,load]);
+  const act=async(name,action)=>{
+    setBusy(name);setError('');setNotice('');
+    try{await action();setNotice(t(name==='prepare'?'prepared':'saved'));await load(chat);}catch{setError(t('failedAction'));}finally{setBusy('');}
+  };
+  const navigate=next=>{setNotice('');setError('');setPage(next);setChat('');setToken('');};
+  const state=view?.status;
+  const home=()=>navigate('home');
+  return h('section',{className:'jand-page','aria-busy':!!busy||loading},h('style',null,css+dashboardCss+chatCss),
+    h('header',{className:'jand-header'},h('h2',null,t('title')),button(t(loading?'refreshing':'refresh'),()=>load(chat),{disabled:!!busy||loading})),
+    h('div',{className:'jand-notice',role:'status','aria-live':'polite'},notice),error?h('p',{role:'alert',className:'jand-error'},error):null,
+    !state?(loading?h('p',{role:'status'},t('loading')):null):chat?h(React.Fragment,null,button(t('back'),home,{className:'jand-back'}),loading?h('p',{role:'status'},t('loading')):view.detail?.chat===chat?h(RecordDetail,{key:chat,detail:view.detail,t}):null):
+    ['security','selfhost'].includes(page)?h(React.Fragment,null,button(t('back'),home,{className:'jand-back'}),h(Guide,{kind:page,t})):
+    h(React.Fragment,null,
+      h('section',{className:'jand-config'},h('div',{className:'jand-config-head'},h('strong',null,t(state.relay===PUBLIC_RELAY?'defaultService':'customService')+' · '+t(state.health.state==='online'?'connectionOk':'connectionUnknown')),button(t(page==='settings'?'closeManage':'manage'),()=>navigate(page==='settings'?'home':'settings'),{'aria-expanded':page==='settings'})),
+        h('p',{className:'jand-muted'},t('kernelVersion')+' '+state.kernel.version+' · '+t(state.kernel.state==='ready'?'kernelReady':state.kernel.state==='not_downloaded'?'automaticKernel':state.kernel.state)),
+        h('p',{className:'jand-muted'},t('autoHint')),
+        state.health.state!=='online'?h('p',null,t('tokenUnknown')):state.health.access===true?h('p',null,t(state.creation==='token_required'?'tokenNeeded':'tokenSaved')):null,
+        h('div',{className:'jand-links'},button(t('securityGuide'),()=>navigate('security'),{className:'jand-text-button'}),button(t('selfHostGuide'),()=>navigate('selfhost'),{className:'jand-text-button'})),
+        page==='settings'?h(ConnectionSettings,{state,relay,setRelay,token,setToken,tokenFile,setTokenFile,formId,t,busy,act,configure,prepare,saveToken,refresh:()=>load('')}):null),
+      h(Overview,{items:view.conversations,t}),h(RecordList,{items:view.conversations,t,onSelect:id=>{setNotice('');setPage('home');setChat(id);}})));
+}
+return {inject:['slots','locale','remote'],async apply(ctx){
+  ctx.locale.register(NS,{zh,en});
+  await ctx.remote.$mount(clientContribution(z));
+  ctx.inject(['remote.jandPanel'],panelCtx=>{
+    const call=name=>async request=>{const result=await panelCtx.remote.jandPanel[name](request);if(!result.ok)throw result.error;return result.value;};
+    const callbacks={read:call('read'),configure:call('configure'),prepare:call('prepare'),saveToken:call('saveToken')};
+    panelCtx.slots.inject('settings.section',()=>panelCtx.slots.register({name:'settings.section',id:'jand',order:30,label:()=>panelCtx.locale.bind(NS)('nav'),locale:NS,inject:()=>callbacks},Panel));
+  });
+}};
