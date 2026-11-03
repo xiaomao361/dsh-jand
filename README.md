@@ -15,6 +15,14 @@ tar -xzf xiaomao361-dsh-jand-0.5.1.tgz
 
 In the target DeepSeek Harness profile, ask the agent to install the extracted `package` directory with `install_bundle`, then reload the profile. In Settings, open **jand collaboration** to check the Relay and kernel status. Desktop testing used DeepSeek Harness 0.2.1-rc.5 on macOS arm64.
 
+## Screenshots
+
+These screenshots show the settings overview and a collaboration transcript from an isolated desktop test. The overview counts the records in that profile’s configured data directory.
+
+| Settings and local statistics | Collaboration transcript |
+| --- | --- |
+| ![DSH settings showing Relay status, local statistics, and collaboration records](https://raw.githubusercontent.com/xiaomao361/dsh-jand/main/assets/screenshots/settings.png) | ![DSH collaboration transcript showing a reply and two deliveries](https://raw.githubusercontent.com/xiaomao361/dsh-jand/main/assets/screenshots/collaboration.png) |
+
 ## Start a collaboration
 
 1. In a DSH conversation, ask the agent to create a handoff for an agreed goal. Give the resulting invitation privately to your collaborator.
