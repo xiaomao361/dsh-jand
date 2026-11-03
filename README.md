@@ -1,5 +1,7 @@
 # dsh-jand
 
+<img src="assets/icon-180.png" alt="dsh-jand icon" width="96">
+
 dsh-jand is a DeepSeek Harness plugin for encrypted file handoffs and cross-device agent collaboration. It uses the [Jand CLI](https://github.com/jaredchao/jand) for transport and DeepSeek Harness for background reception and managed task execution.
 
 ## Install
