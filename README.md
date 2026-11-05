@@ -9,8 +9,8 @@ dsh-jand is a DeepSeek Harness plugin for encrypted file handoffs and cross-devi
 Download the package for a specific version from npm:
 
 ```sh
-npm pack @xiaomao361/dsh-jand@0.5.2 --registry=https://registry.npmjs.org
-tar -xzf xiaomao361-dsh-jand-0.5.2.tgz
+npm pack @xiaomao361/dsh-jand@0.5.3 --registry=https://registry.npmjs.org
+tar -xzf xiaomao361-dsh-jand-0.5.3.tgz
 ```
 
 In the target DeepSeek Harness profile, ask the agent to install the extracted `package` directory with `install_bundle`, then reload the profile. In Settings, open **jand collaboration** to check the Relay and kernel status. Desktop testing used DeepSeek Harness 0.2.1-rc.5 on macOS arm64.
@@ -33,7 +33,7 @@ The default public Relay accepts anonymous invitations. A self-hosted Relay can 
 
 ## Runtime and data
 
-The plugin pins Jand 0.5.0 and downloads the matching kernel on demand. It verifies SHA-256 for both the archive and executable. Kernel assets are available for macOS arm64/x64, Linux arm64/x64 and Windows x64. Managed task execution on Windows is manual. Only macOS arm64 was exercised on a device for this release.
+The plugin pins Jand 0.5.0 and downloads the matching kernel on demand. It verifies SHA-256 for both the archive and executable. The official GitHub release is the primary source; a hash-equal copy on the relay host is used when the primary fails, each source is retried once, and integrity failures never fall back silently. If neither origin is reachable, Settings accepts an absolute path to the official archive or the extracted runtime and enforces the same hashes; modified files are refused. Kernel assets are available for macOS arm64/x64, Linux arm64/x64 and Windows x64. Windows ARM64 has no published asset and is reported before any collaboration action. Only macOS arm64 was exercised on a device for this release.
 
 The default data directory is `~/.dsh-jand`. It contains collaboration history, receiver state and task records. The default controller admits one coordinator. Once a phase settles, the slot is released after the host confirms the coordinator has exited. Task status is available by query.
 
@@ -51,4 +51,4 @@ JAND_SOURCE_ROOT=/path/to/jand npm run test:tasks
 npm run pack:local
 ```
 
-Use the Jand source revision identified in [the kernel manifest](kernel/manifest.json) for the task tests. See the [architecture](docs/ARCHITECTURE.md) and [0.5.2 release notes](docs/RELEASE_0.5.2.md) for details.
+Use the Jand source revision identified in [the kernel manifest](kernel/manifest.json) for the task tests. See the [architecture](docs/ARCHITECTURE.md) and [0.5.3 release notes](docs/RELEASE_0.5.3.md) for details.
