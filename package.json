@@ -1,6 +1,6 @@
 {
   "name": "@xiaomao361/dsh-jand",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "type": "module",
   "description": "Durable cross-device jand conversations using native DeepSeek Harness jobs",
   "exports": {
@@ -23,7 +23,9 @@
     "docs/ARCHITECTURE.md",
     "docs/CHAT_RECORDS_0.5.1.md",
     "docs/RELEASE_0.5.1.md",
-    "docs/RELEASE_0.5.2.md"
+    "docs/RELEASE_0.5.2.md",
+    "docs/DOWNLOAD_MIRROR.md",
+    "scripts/check-mirror.mjs"
   ],
   "dsh": {
     "bundle": {
@@ -50,7 +52,8 @@
     "test:native": "node --test test/native.integration.js",
     "check": "node --check index.js && node --check src/worker.js && node --check client.js && node --check src/tasks.js && node --check src/task-process.js && node --check src/history.js && node --check src/presentation.js",
     "pack:local": "npm run build:client && python3 scripts/package-local.py",
-    "test:tasks": "node scripts/test-tasks.mjs"
+    "test:tasks": "node scripts/test-tasks.mjs",
+    "check:mirror": "node scripts/check-mirror.mjs"
   },
   "repository": {
     "type": "git",

@@ -17,7 +17,10 @@
       "goarch": "arm64",
       "platform_signed": true,
       "notarized": false,
-      "signature_evidence": "release_build_info"
+      "signature_evidence": "release_build_info",
+      "archive_mirrors": [
+        "https://jand.zhou-wei.com/downloads/jand/v0.5.0/jand-0.5.0-macos-arm64.tar.gz"
+      ]
     },
     "darwin-x64": {
       "archive_url": "https://github.com/jaredchao/jand/releases/download/v0.5.0/jand-0.5.0-macos-amd64.tar.gz",
@@ -29,7 +32,10 @@
       "goarch": "amd64",
       "platform_signed": true,
       "notarized": false,
-      "signature_evidence": "release_build_info"
+      "signature_evidence": "release_build_info",
+      "archive_mirrors": [
+        "https://jand.zhou-wei.com/downloads/jand/v0.5.0/jand-0.5.0-macos-amd64.tar.gz"
+      ]
     },
     "win32-x64": {
       "archive_url": "https://github.com/jaredchao/jand/releases/download/v0.5.0/jand-0.5.0-windows-amd64.zip",
@@ -41,7 +47,10 @@
       "goarch": "amd64",
       "platform_signed": false,
       "notarized": false,
-      "signature_evidence": "release_build_info"
+      "signature_evidence": "release_build_info",
+      "archive_mirrors": [
+        "https://jand.zhou-wei.com/downloads/jand/v0.5.0/jand-0.5.0-windows-amd64.zip"
+      ]
     },
     "linux-arm64": {
       "archive_url": "https://github.com/jaredchao/jand/releases/download/v0.5.0/jand-0.5.0-linux-arm64.tar.gz",
@@ -53,7 +62,10 @@
       "goarch": "arm64",
       "platform_signed": false,
       "notarized": false,
-      "signature_evidence": "release_build_info"
+      "signature_evidence": "release_build_info",
+      "archive_mirrors": [
+        "https://jand.zhou-wei.com/downloads/jand/v0.5.0/jand-0.5.0-linux-arm64.tar.gz"
+      ]
     },
     "linux-x64": {
       "archive_url": "https://github.com/jaredchao/jand/releases/download/v0.5.0/jand-0.5.0-linux-amd64.tar.gz",
@@ -65,7 +77,10 @@
       "goarch": "amd64",
       "platform_signed": false,
       "notarized": false,
-      "signature_evidence": "release_build_info"
+      "signature_evidence": "release_build_info",
+      "archive_mirrors": [
+        "https://jand.zhou-wei.com/downloads/jand/v0.5.0/jand-0.5.0-linux-amd64.tar.gz"
+      ]
     }
   },
   "unsupported_targets": [

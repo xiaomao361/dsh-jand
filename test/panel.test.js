@@ -24,7 +24,8 @@ async function gatewayFixture(t) {
 }
 test('real DSH Gateway registers strict panel endpoints, protects credentials and rejects guests',async t=>{
   const {call,manager,ctx}=await gatewayFixture(t);
-  assert.equal(panelRemote.descriptors.length,4);assert.equal(ctx.typert.local.list().filter(d=>d.namespace==='jandPanel').length,4);
+  assert.equal(panelRemote.descriptors.length,5);assert.equal(ctx.typert.local.list().filter(d=>d.namespace==='jandPanel').length,5);
+  assert.ok(panelRemote.descriptors.some(d=>d.method==='importKernel'),'offline import must be a registered endpoint');
   const fetcher=manager.fetcher;
   let probes=0;
   manager.fetcher=async(...args)=>{probes++;return fetcher(...args);};
@@ -45,6 +46,9 @@ test('real DSH Gateway registers strict panel endpoints, protects credentials an
   assert.equal((await call('configure',{relay:'http://remote.example'})).ok,false);
   assert.equal((await call('read',{unknown:'input'})).ok,false);
   const guest={...peer,principal:{kind:'guest',id:'guest'}};assert.equal((await call('read',{},guest)).ok,false);
+  assert.equal((await call('importKernel',{path:'/tmp/nope'},guest)).ok,false,'guests cannot import a runtime');
+  const rejected=await call('importKernel',{path:'/tmp/does-not-exist-'+Date.now()});
+  assert.equal(rejected.ok,false);assert.match(rejected.error.message,/JAND_KERNEL_IMPORT/);
   assert.deepEqual(clientContribution(z).descriptors.map(d=>[d.namespace,d.method]),panelRemote.descriptors.map(d=>[d.namespace,d.method]));
 });
 test('actual DSH Client Remote mounts the panel contract and round-trips through the native Host Gateway',async t=>{

@@ -1,5 +1,5 @@
-function Panel({t,read,configure,prepare,saveToken}) {
-  const [view,setView]=React.useState(null),[chat,setChat]=React.useState(''),[page,setPage]=React.useState('home'),[busy,setBusy]=React.useState(''),[notice,setNotice]=React.useState(''),[error,setError]=React.useState(''),[relay,setRelay]=React.useState(''),[token,setToken]=React.useState(''),[tokenFile,setTokenFile]=React.useState(''),[loading,setLoading]=React.useState(true);
+function Panel({t,read,configure,prepare,importKernel,saveToken}) {
+  const [view,setView]=React.useState(null),[chat,setChat]=React.useState(''),[page,setPage]=React.useState('home'),[busy,setBusy]=React.useState(''),[notice,setNotice]=React.useState(''),[error,setError]=React.useState(''),[relay,setRelay]=React.useState(''),[token,setToken]=React.useState(''),[tokenFile,setTokenFile]=React.useState(''),[importPath,setImportPath]=React.useState(''),[loading,setLoading]=React.useState(true);
   const generation=React.useRef(0),previous=React.useRef(null),formId=React.useId();
   const load=React.useCallback(async(selected='')=>{
     const request=++generation.current;setError('');setLoading(true);
@@ -22,10 +22,20 @@ function Panel({t,read,configure,prepare,saveToken}) {
       }catch{/* Local history remains usable while connection status is unavailable. */}
     }
   },[read,t]);
-  React.useEffect(()=>{void load(chat);return()=>{generation.current++;};},[chat,load]);
+  React.useEffect(()=>{void load(chat);return()=>{generation.current++;};},[chat,load]);  // While the runtime downloads, keep the progress line current without
+  // replacing the record list with a loading state.
+  const refreshStatus=React.useCallback(async()=>{
+    try{const {status}=await read({mode:'connection'});setView(current=>current?{...current,status}:current);}catch{}
+  },[read]);
+  React.useEffect(()=>{
+    if(busy!=='prepare'&&busy!=='importKernel')return;
+    const timer=setInterval(()=>{void refreshStatus();},1_200);
+    return()=>clearInterval(timer);
+  },[busy,refreshStatus]);
+
   const act=async(name,action)=>{
     setBusy(name);setError('');setNotice('');
-    try{await action();setNotice(t(name==='prepare'?'prepared':'saved'));await load(chat);}catch{setError(t('failedAction'));}finally{setBusy('');}
+    try{await action();setNotice(t(name==='prepare'?'prepared':name==='importKernel'?'imported':'saved'));await load(chat);}catch(caught){setError(['prepare','importKernel'].includes(name)?kernelErrorText(t,caught):t('failedAction'));}finally{setBusy('');}
   };
   const navigate=next=>{setNotice('');setError('');setPage(next);setChat('');setToken('');};
   const state=view?.status;
@@ -38,10 +48,12 @@ function Panel({t,read,configure,prepare,saveToken}) {
     h(React.Fragment,null,
       h('section',{className:'jand-config'},h('div',{className:'jand-config-head'},h('strong',null,t(state.relay===PUBLIC_RELAY?'defaultService':'customService')+' · '+t(state.health.state==='online'?'connectionOk':'connectionUnknown')),button(t(page==='settings'?'closeManage':'manage'),()=>navigate(page==='settings'?'home':'settings'),{'aria-expanded':page==='settings'})),
         h('p',{className:'jand-muted'},t('kernelVersion')+' '+state.kernel.version+' · '+t(state.kernel.state==='ready'?'kernelReady':state.kernel.state==='not_downloaded'?'automaticKernel':state.kernel.state)),
+        state.kernel.state==='unsupported'?h('p',{className:'jand-error',role:'alert'},t('unsupportedShort')):null,
         h('p',{className:'jand-muted'},t('autoHint')),
+        state.relay===PUBLIC_RELAY?h('p',{className:'jand-muted'},t('defaultRelayShort')):null,
         state.health.state!=='online'?h('p',null,t('tokenUnknown')):state.health.access===true?h('p',null,t(state.creation==='token_required'?'tokenNeeded':'tokenSaved')):null,
         h('div',{className:'jand-links'},button(t('securityGuide'),()=>navigate('security'),{className:'jand-text-button'}),button(t('selfHostGuide'),()=>navigate('selfhost'),{className:'jand-text-button'})),
-        page==='settings'?h(ConnectionSettings,{state,relay,setRelay,token,setToken,tokenFile,setTokenFile,formId,t,busy,act,configure,prepare,saveToken,refresh:()=>load('')}):null),
+        page==='settings'?h(ConnectionSettings,{state,relay,setRelay,token,setToken,tokenFile,setTokenFile,importPath,setImportPath,formId,t,busy,act,configure,prepare,importKernel,saveToken,refresh:()=>load('')}):null),
       h(Overview,{items:view.conversations,t}),h(RecordList,{items:view.conversations,t,onSelect:id=>{setNotice('');setPage('home');setChat(id);}})));
 }
 return {inject:['slots','locale','remote'],async apply(ctx){
@@ -49,7 +61,7 @@ return {inject:['slots','locale','remote'],async apply(ctx){
   await ctx.remote.$mount(clientContribution(z));
   ctx.inject(['remote.jandPanel'],panelCtx=>{
     const call=name=>async request=>{const result=await panelCtx.remote.jandPanel[name](request);if(!result.ok)throw result.error;return result.value;};
-    const callbacks={read:call('read'),configure:call('configure'),prepare:call('prepare'),saveToken:call('saveToken')};
+    const callbacks={read:call('read'),configure:call('configure'),prepare:call('prepare'),importKernel:call('importKernel'),saveToken:call('saveToken')};
     panelCtx.slots.inject('settings.section',()=>panelCtx.slots.register({name:'settings.section',id:'jand',order:30,label:()=>panelCtx.locale.bind(NS)('nav'),locale:NS,inject:()=>callbacks},Panel));
   });
 }};

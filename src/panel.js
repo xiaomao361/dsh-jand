@@ -1,13 +1,14 @@
 import { TypertRemoteService, Remote, RemoteError, createTypertRemoteInfo, principalOf } from '@deepseek-ai/dsh-typert-protocol';
 import { z } from 'zod';
 import { status,configure } from './onboarding.js';
+import { installLocal } from './kernel.js';
 import { readHistory } from './history.js';
 import {panelSpec} from './panel-contract.js';
 
 const codecs={
   read:z.strictObject({chat:z.string().regex(/^[a-f0-9]{32}$/).optional(),mode:z.enum(['local','connection']).optional()}),
   configure:z.strictObject({relay:z.string().optional(),token_file:z.string().optional()}),
-  prepare:z.strictObject({}),saveToken:z.strictObject({value:z.string().min(1).max(8192)})
+  prepare:z.strictObject({}),saveToken:z.strictObject({value:z.string().min(1).max(8192)}),importKernel:z.strictObject({path:z.string().min(1).max(4096)})
 };
 export const panelRemote=createTypertRemoteInfo(panelSpec(z),z);
 
@@ -37,6 +38,11 @@ export class JandPanel extends TypertRemoteService {
     this.assertOwner();codecs.prepare.parse(request);
     try{await this.manager.kernel(this.manager.root);return status(this.manager);}
     catch(error){throw new RemoteError('gateway/bad-request',error instanceof Error?error.message:'Kernel preparation failed.',{});}
+  }
+  async importKernel(request) {
+    this.assertOwner();codecs.importKernel.parse(request);
+    try{await installLocal(this.manager.root,undefined,request.path);return status(this.manager);}
+    catch(error){throw new RemoteError('gateway/bad-request',error instanceof Error?error.message:'The runtime could not be imported.',{});}
   }
   async saveToken(request) {
     this.assertOwner();

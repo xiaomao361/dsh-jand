@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { atomic, read } from './store.js';
-import { shippedManifest, target, sha256 } from './kernel.js';
+import { shippedManifest, target, sha256, kernelOrigin, kernelProgress } from './kernel.js';
 
 export function relayOrigin(value) {
   let url;try{url=new URL(value);}catch{throw new Error('Enter a valid relay address.');}
@@ -10,11 +10,14 @@ export function relayOrigin(value) {
   return url.origin;
 }
 export function kernelStatus(root,manifest=shippedManifest(),localSha256) {
-  const platform=target(),asset=manifest.targets[platform];
-  if(!asset)return {state:'unsupported',platform,version:manifest.version};
+  const platform=target(),asset=manifest.targets[platform],published=Object.keys(manifest.targets);
+  if(!asset)return {state:'unsupported',platform,version:manifest.version,supported:false,published};
   const file=path.join(root,'kernels',localSha256?'local-'+localSha256:manifest.version,platform,localSha256??asset.binary_sha256,process.platform==='win32'?'jand.exe':'jand');
-  if(!fs.existsSync(file))return {state:'not_downloaded',platform,version:localSha256?'local-dev':manifest.version};
-  return {state:sha256(fs.readFileSync(file))===(localSha256??asset.binary_sha256)?'ready':'checksum_mismatch',platform,version:localSha256?'local-dev':manifest.version};
+  const shape={state:'not_downloaded',platform,version:localSha256?'local-dev':manifest.version,supported:true,signed:!!asset.platform_signed,notarized:!!asset.notarized,source:new URL(asset.archive_url).hostname,sources:[asset.archive_url,...(asset.archive_mirrors??[])].map(value=>new URL(value).hostname)};
+  if(!fs.existsSync(file))return shape;
+  const state=sha256(fs.readFileSync(file))===(localSha256??asset.binary_sha256)?'ready':'checksum_mismatch';
+  // Which pinned origin actually produced this copy, when it is known.
+  return {...shape,state,...state==='ready'?{origin:kernelOrigin(file)}:null};
 }
 export async function probeRelay(relay,fetcher=fetch) {
   try {
@@ -33,7 +36,7 @@ export function creationState(probe,configured) {
 }
 export async function status(manager,{probe=true,fetcher=manager.fetcher??fetch}={}) {
   const health=probe?await probeRelay(manager.relay,fetcher):{state:'unchecked',access:null};
-  return {relay:manager.relay,health,kernel:kernelStatus(manager.root,undefined,manager.localKernelSha256),tokenConfigured:!!manager.creationTokenFile(),creation:creationState(health,!!manager.creationTokenFile()),join:'invitation_only',
+  return {relay:manager.relay,health,kernel:kernelStatus(manager.root,undefined,manager.localKernelSha256),tokenConfigured:!!manager.creationTokenFile(),creation:creationState(health,!!manager.creationTokenFile()),join:'invitation_only',preparation:kernelProgress(),harness:manager.harness??null,
     guide:{canReceiveWithoutCreationToken:true,tokenIsOperatorIssued:true,tokenValidated:false}};
 }
 export function configure(manager,request) {
