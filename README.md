@@ -51,4 +51,4 @@ JAND_SOURCE_ROOT=/path/to/jand npm run test:tasks
 npm run pack:local
 ```
 
-Use the Jand source revision identified in [the kernel manifest](kernel/manifest.json) for the task tests. See the [architecture](docs/ARCHITECTURE.md) and [0.5.3 release notes](docs/RELEASE_0.5.3.md) for details.
+Use the Jand source revision identified in [the kernel manifest](kernel/manifest.json) for the task tests. See the [architecture](docs/ARCHITECTURE.md) and [0.5.3 release notes](https://github.com/xiaomao361/dsh-jand/blob/main/docs/RELEASE_0.5.3.md) for details.
