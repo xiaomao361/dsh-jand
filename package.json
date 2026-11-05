@@ -1,6 +1,6 @@
 {
   "name": "@xiaomao361/dsh-jand",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "type": "module",
   "description": "Durable cross-device jand conversations using native DeepSeek Harness jobs",
   "exports": {
@@ -25,6 +25,7 @@
     "docs/RELEASE_0.5.1.md",
     "docs/RELEASE_0.5.2.md",
     "docs/RELEASE_0.5.3.md",
+    "docs/RELEASE_0.5.4.md",
     "docs/DOWNLOAD_MIRROR.md",
     "scripts/check-mirror.mjs"
   ],

@@ -3,7 +3,7 @@
 2026-11-05，在现有 `https://jand.zhou-wei.com` 上增加独立的静态下载路径。
 
 - 内核：`/downloads/jand/v0.5.0/`，含五个平台的官方归档、`manifest.json` 和 `SHA256SUMS.txt`。
-- 插件候选包：`/downloads/dsh-jand/v0.5.3/<完整 SHA-256>/local-dsh-jand-0.5.3.tgz`，同目录提供 `SHA256SUMS.txt`。哈希目录区分同版本候选，不覆盖旧包。
+- 插件候选包：`/downloads/dsh-jand/v0.5.4/<完整 SHA-256>/local-dsh-jand-0.5.4.tgz`，同目录提供 `SHA256SUMS.txt`。哈希目录区分同版本候选，不覆盖旧包。
 - 文件索引：`/downloads/index.json`；准确列出本次软件包的 URL、大小及 SHA-256。
 
 ## 下载策略
