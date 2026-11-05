@@ -21,6 +21,14 @@ GitHub 为主源；每个来源先自动重试一次（间隔 1 秒），传输�
 `--download --platform win32-x64` 真实下载并核对归档与解出二进制；
 `--package <tgz>` 核对候选包哈希。索引里登记的包哈希必须等于最终上传的文件。
 
+## 归档与备份
+
+被替换的候选构建不留在 HTTP 服务目录内，移到 `/srv/jand-downloads/archive/`
+（`archive/README.md` 记录每个归档的来源与替换原因）。恢复某个归档前，先把它
+复制回 `/srv/jand-downloads/downloads/` 并同时更新 `index.json`，否则下载与索引
+会对不上。索引的历史版本保存在 `/var/backups/jand-downloads/`，同样不在 HTTP
+服务目录内。
+
 ## 服务器维护
 
 静态根目录 `/srv/jand-downloads`；Nginx 的 `location ^~ /downloads/` 使用该根目录，只接受 GET/HEAD，关闭目录索引，找不到的文件返回 404，不落到 Relay 代理。
