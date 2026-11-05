@@ -59,3 +59,64 @@ test('one actual command admission per run; concurrent tool calls cannot bypass 
  const first=tasks.execute({cwd:root,command:'sleep 30'},agent,controller.signal);t.after(()=>controller.abort());
  await assert.rejects(tasks.execute({cwd:root,command:'printf forbidden'},agent,controller.signal),/slot full/);controller.abort();const result=await first;assert.equal(result.state,'stopped');
 });
+
+// Idle hosts must not pay for control monitoring: the tick reads persisted scope
+// records instead of spawning the controller once per scope.
+test('control monitor reads persisted scope state and never spawns the controller',async t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'jand-tasks-monitor-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const ctx={tools:{guard(){}},get:()=>undefined};
+ const tasks=new DSHTasks({ctx,manager:{root,ownerOf:()=>null,bind(){}},binary:null,sha256:null});
+ const stops=[];let kernel=0;
+ tasks.finishStop=async s=>{stops.push(s.scope.phase);};
+ tasks.ledger={root:path.join(root,'tasks'),local:()=>({states:[{scope:{host:'dsh',chat:'c',phase:'p'},owner:'o',halted:true,control_id:2}],unreadable:0}),scopes:()=>{kernel++;return [];}};
+ await tasks.checkControls();
+ assert.deepEqual(stops,['p']);
+ await tasks.checkControls();
+ assert.deepEqual(stops,['p'],'one finish per control id');
+ assert.equal(tasks.monitorFailed,false);
+ await tasks.dispose();
+ assert.equal(kernel,0,'idle ticks must not query the controller');
+});
+
+test('planned scopes are not stopped; unreadable records surface degraded monitoring',async t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'jand-tasks-monitor-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const ctx={tools:{guard(){}},get:()=>undefined};
+ const tasks=new DSHTasks({ctx,manager:{root,ownerOf:()=>null,bind(){}},binary:null,sha256:null});
+ let stops=0;tasks.finishStop=async()=>{stops++;};
+ tasks.ledger={root:path.join(root,'tasks'),local:()=>({states:[{scope:{host:'dsh',chat:'c',phase:'planned'},owner:'o',halted:false,control_id:0}],unreadable:1})};
+ await tasks.checkControls();
+ assert.equal(stops,0);
+ assert.equal(tasks.monitorFailed,true);
+ tasks.ledger.local=()=>({states:[],unreadable:0});
+ await tasks.checkControls();
+ assert.equal(tasks.monitorFailed,false,'monitoring recovers once records are readable');
+ await tasks.dispose();
+});
+
+test('ledger.local reads scope records, skips unreadable files and picks up rewrites',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'jand-tasks-local-'));try{
+  const ledger=new TaskLedger({root,binary:'/nonexistent/jand',sha256:'0'.repeat(64)});
+  fs.mkdirSync(ledger.root,{recursive:true});
+  const one=path.join(ledger.root,'a'.repeat(64)+'.json'),two=path.join(ledger.root,'b'.repeat(64)+'.json');
+  fs.writeFileSync(one,JSON.stringify({scope:{chat:'c'},owner:'o',halted:false,control_id:0}));
+  fs.writeFileSync(two,'{not json');
+  const first=ledger.local();assert.equal(first.states.length,1);assert.equal(first.unreadable,1);
+  fs.writeFileSync(one,JSON.stringify({scope:{chat:'c'},owner:'o',halted:true,control_id:3}));
+  fs.writeFileSync(two,JSON.stringify({scope:{chat:'d'},owner:'o',halted:false,control_id:0}));
+  const second=ledger.local();assert.equal(second.states.length,2);assert.equal(second.unreadable,0);
+  assert.equal(second.states.find(s=>s.scope.chat==='c').halted,true,'rewritten records are re-read');
+  assert.equal(ledger.local().states.length,2);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('controller pin is hashed once per file version and still rejects drift',()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'jand-task-pin-'));try{
+  const file=path.join(root,'jand');fs.writeFileSync(file,'abc');
+  const ledger=new TaskLedger({root,binary:file,sha256:createHash('sha256').update('abc').digest('hex')});
+  assert.equal(ledger.pinned(),true);
+  assert.equal(ledger.pinned(),true);
+  fs.writeFileSync(file,'abcd');
+  assert.equal(ledger.pinned(),false,'changed binary content invalidates the cached digest');
+  assert.throws(()=>ledger.call({op:'status'}),/TASK_CONTROLLER_UNAVAILABLE/);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});

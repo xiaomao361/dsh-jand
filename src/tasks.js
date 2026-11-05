@@ -19,18 +19,51 @@ function taskSummary(text, fallback) {
 // Controller inputs are hash-pinned: either the published kernel or an explicit
 // local override. Resolving the cached release never downloads or executes it.
 export class TaskLedger {
- constructor({root,binary,sha256,resolveController}){this.root=path.resolve(root,'tasks');this.binary=binary;this.hash=sha256;this.resolveController=resolveController;}
+ constructor({root,binary,sha256,resolveController}){this.root=path.resolve(root,'tasks');this.binary=binary;this.hash=sha256;this.resolveController=resolveController;this.pins=new Map();this.records=new Map();}
  refresh(){if(this.resolveController){const pin=this.resolveController();this.binary=pin?.binary;this.hash=pin?.sha256;}}
- probe(){try{this.refresh();if(!this.binary||!path.isAbsolute(this.binary)||!/^[a-f0-9]{64}$/.test(this.hash??'')||digest(fs.readFileSync(this.binary))!==this.hash)return {available:false,reason:'controller_pin_missing_or_mismatched'};
+ // The controller binary is several megabytes. Hash it once per file version
+ // rather than re-reading it on every status query and control tick.
+ pinned(){
+  if(!this.binary||!path.isAbsolute(this.binary)||!/^[a-f0-9]{64}$/.test(this.hash??''))return false;
+  try{
+   const stat=fs.statSync(this.binary),cached=this.pins.get(this.binary);
+   if(cached&&cached.size===stat.size&&cached.mtimeMs===stat.mtimeMs&&cached.ctimeMs===stat.ctimeMs&&cached.ino===stat.ino)return cached.digest===this.hash;
+   const value=digest(fs.readFileSync(this.binary));
+   this.pins.set(this.binary,{size:stat.size,mtimeMs:stat.mtimeMs,ctimeMs:stat.ctimeMs,ino:stat.ino,digest:value});
+   return value===this.hash;
+  }catch{return false;}
+ }
+ probe(){try{this.refresh();if(!this.pinned())return {available:false,reason:'controller_pin_missing_or_mismatched'};
   const result=JSON.parse(execFileSync(this.binary,['task','--capabilities'],{encoding:'utf8',maxBuffer:4096,timeout:5000,stdio:['ignore','pipe','pipe'],env:{...process.env,JAND_PAGE:'off'}}));
   return {available:result.contract==='jand-task-v1'&&result.schema===1&&result.locking===true,contract:result.contract,platform:result.platform};
  }catch{return {available:false,reason:'controller_contract_unavailable'};}}
  call(q){
   this.refresh();
-  if(!this.binary||!path.isAbsolute(this.binary)||!/^[a-f0-9]{64}$/.test(this.hash??'')||digest(fs.readFileSync(this.binary))!==this.hash)throw new Error('TASK_CONTROLLER_UNAVAILABLE: prepare the pinned Jand kernel or configure an absolute controller path with matching SHA-256.');
+  if(!this.pinned())throw new Error('TASK_CONTROLLER_UNAVAILABLE: prepare the pinned Jand kernel or configure an absolute controller path with matching SHA-256.');
   let bytes;try{bytes=execFileSync(this.binary,['task','--root',this.root],{input:JSON.stringify(q),encoding:'utf8',maxBuffer:16*1024*1024,timeout:10_000,env:{...process.env,JAND_PAGE:'off'},stdio:['pipe','pipe','pipe']});}
   catch(e){let reason;try{reason=JSON.parse(e.stdout).error;}catch{}throw new Error(reason??'Task controller result uncertain; query the ledger before retrying.');}
   return JSON.parse(bytes);
+ }
+ // Control monitoring needs only the persisted scope records. Reading them is
+ // cheap; asking the controller instead would spawn one process per scope per
+ // tick and re-hash the binary, which burns a core even with no task running.
+ local(){
+  let names;
+  try{names=fs.readdirSync(this.root).filter(n=>/^[a-f0-9]{64}\.json$/.test(n));}catch{this.records.clear();return {states:[],unreadable:0};}
+  const live=new Set(names),states=[];let unreadable=0;
+  for(const name of names){
+   const file=path.join(this.root,name);let stat;
+   try{stat=fs.statSync(file);}catch{this.records.delete(name);unreadable++;continue;}
+   const cached=this.records.get(name);
+   if(cached&&cached.size===stat.size&&cached.mtimeMs===stat.mtimeMs&&cached.ctimeMs===stat.ctimeMs&&cached.ino===stat.ino){states.push(cached.state);continue;}
+   try{
+    const state=JSON.parse(fs.readFileSync(file,'utf8'));
+    if(!state||typeof state!=='object'||!state.scope)throw new Error('invalid scope record');
+    this.records.set(name,{size:stat.size,mtimeMs:stat.mtimeMs,ctimeMs:stat.ctimeMs,ino:stat.ino,state});states.push(state);
+   }catch{this.records.delete(name);unreadable++;}
+  }
+  for(const name of [...this.records.keys()])if(!live.has(name))this.records.delete(name);
+  return {states,unreadable};
  }
  scopes(){if(!fs.existsSync(this.root))return [];return fs.readdirSync(this.root).filter(n=>/^[a-f0-9]{64}\.json$/.test(n)).map(n=>{const s=JSON.parse(fs.readFileSync(path.join(this.root,n),'utf8'));return this.call({op:'status',scope:s.scope,owner:s.owner}).state;});}
 }
@@ -40,7 +73,19 @@ export class DSHTasks {
   if(this.enabled&&typeof ctx.tools.guard==='function')ctx.tools.guard(exec=>this.guard(exec));
   if(this.enabled){this.controlTimer=setInterval(()=>this.checkControls(),250);this.controlTimer.unref();}
  }
- async checkControls(){if(this.disposed||this.checkingControls)return;this.checkingControls=true;try{for(const s of this.ledger.scopes()){const key=JSON.stringify(s.scope);if(s.halted&&s.control_id&&this.controls.get(key)!==s.control_id){this.controls.set(key,s.control_id);await this.finishStop(s,this.ctx.get('agents')?.get(s.owner));}}}catch{this.monitorFailed=true;}finally{this.checkingControls=false;}}
+ async checkControls(){
+  if(this.disposed||this.checkingControls)return;
+  this.checkingControls=true;
+  try{
+   const {states,unreadable}=this.ledger.local();
+   for(const s of states){
+    const key=JSON.stringify(s.scope);
+    if(s.halted&&s.control_id&&this.controls.get(key)!==s.control_id){this.controls.set(key,s.control_id);await this.finishStop(s,this.ctx.get('agents')?.get(s.owner));}
+   }
+   this.monitorFailed=unreadable>0;
+  }catch{this.monitorFailed=true;}
+  finally{this.checkingControls=false;}
+ }
  capability(parent){
   const sub=this.ctx.get('subagents'),provider=sub?.getProvider('spawn');
   const background=typeof sub?.startActivation==='function'&&typeof provider?.prepareContinuable==='function';
